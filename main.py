@@ -39,8 +39,13 @@ def update_site_file(new_data, var_name):
         print(f"Ошибка FTP: {e}")
         return False
 
-@bot.message_handler(func=lambda m: m.chat.id == ADMIN_ID and m.text.startswith('/routes'))
+@bot.message_handler(commands=['start'])
+def start(message):
+    bot.reply_to(message, f"Привет! Твой ID: {message.chat.id}. Бот на связи и готов работать.")
+
+@bot.message_handler(func=lambda m: m.text.startswith('/routes'))
 def handle_routes(message):
+    # Теперь любой может попробовать обновить маршруты (для теста)
     json_data = message.text.replace('/routes', '').strip()
     if update_site_file(json_data, "trunkRoutes"):
         bot.reply_to(message, "✅ Маршруты на сайте обновлены!")
