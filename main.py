@@ -25,21 +25,33 @@ def get_main_menu():
     markup.add("Добавить домен", "Мануал")
     return markup
 
+# --- ИСПРАВЛЕННЫЙ СТАРТ И КАПЧА ---
 @bot.message_handler(commands=['start'])
 def start_cmd(message):
     markup = types.InlineKeyboardMarkup()
-    # ИСПРАВЛЕНО: Явное указание text и callback_query_data
-    markup.add(types.InlineKeyboardButton(text="Я не робот 🤖", callback_query_data="pass_captcha"))
-    bot.send_message(message.chat.id, "Для доступа к панели управления подтвердите, что вы человек:", reply_markup=markup)
+    # ВАЖНО: используем callback_data вместо callback_query_data
+    btn = types.InlineKeyboardButton(text="Я не робот 🤖", callback_data="pass_captcha")
+    markup.add(btn)
+    
+    bot.send_message(
+        message.chat.id, 
+        "Для доступа к панели управления подтвердите, что вы человек:", 
+        reply_markup=markup
+    )
 
 @bot.callback_query_handler(func=lambda call: call.data == "pass_captcha")
 def on_captcha(call):
+    # Уведомляем Telegram, что мы получили нажатие (чтобы кнопка не "зависла")
     bot.answer_callback_query(call.id, "Проверка пройдена!")
+    
+    # Удаляем сообщение с капчей
     bot.delete_message(call.message.chat.id, call.message.message_id)
+    
+    # Приветствие
     bot.send_photo(
         call.message.chat.id, 
         IMAGE_URL, 
-        caption="✨ **Капча пройдена!**\n\nДобро пожаловать в StarBus Admin Panel. Используйте меню ниже.",
+        caption="✨ **Капча пройдена!**\n\nДобро пожаловать в StarBus Admin Panel. Используйте меню ниже для работы с рейсами.",
         parse_mode="Markdown",
         reply_markup=get_main_menu()
     )
