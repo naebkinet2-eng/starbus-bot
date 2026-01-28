@@ -10,9 +10,9 @@ from flask import Flask, request
 TOKEN = "8510832683:AAHMvIzskXXu0IaJHgV4m3O1BRbu8HJCfd4"
 IMAGE_URL = "https://i.ibb.co/MxXv4XGC/Gemini-Generated-Image-wb2747wb2747wb27.png"
 
-# Инициализация ИИ
+# Инициализация ИИ - ИСПРАВЛЕНО НА gemini-1.5-flash
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-ai_model = genai.GenerativeModel('gemini-pro')
+ai_model = genai.GenerativeModel('gemini-1.5-flash')
 
 bot = telebot.TeleBot(TOKEN, threaded=False)
 server = Flask(__name__)
@@ -25,33 +25,21 @@ def get_main_menu():
     markup.add("Добавить домен", "Мануал")
     return markup
 
-# --- ИСПРАВЛЕННЫЙ СТАРТ И КАПЧА ---
 @bot.message_handler(commands=['start'])
 def start_cmd(message):
     markup = types.InlineKeyboardMarkup()
-    # ВАЖНО: используем callback_data вместо callback_query_data
-    btn = types.InlineKeyboardButton(text="Я не робот 🤖", callback_data="pass_captcha")
-    markup.add(btn)
-    
-    bot.send_message(
-        message.chat.id, 
-        "Для доступа к панели управления подтвердите, что вы человек:", 
-        reply_markup=markup
-    )
+    # ИСПРАВЛЕНО: callback_data
+    markup.add(types.InlineKeyboardButton(text="Я не робот 🤖", callback_data="pass_captcha"))
+    bot.send_message(message.chat.id, "Для доступа к панели управления подтвердите, что вы человек:", reply_markup=markup)
 
 @bot.callback_query_handler(func=lambda call: call.data == "pass_captcha")
 def on_captcha(call):
-    # Уведомляем Telegram, что мы получили нажатие (чтобы кнопка не "зависла")
     bot.answer_callback_query(call.id, "Проверка пройдена!")
-    
-    # Удаляем сообщение с капчей
     bot.delete_message(call.message.chat.id, call.message.message_id)
-    
-    # Приветствие
     bot.send_photo(
         call.message.chat.id, 
         IMAGE_URL, 
-        caption="✨ **Капча пройдена!**\n\nДобро пожаловать в StarBus Admin Panel. Используйте меню ниже для работы с рейсами.",
+        caption="✨ **Капча пройдена!**\n\nДобро пожаловать в StarBus Admin Panel. Используйте меню ниже.",
         parse_mode="Markdown",
         reply_markup=get_main_menu()
     )
