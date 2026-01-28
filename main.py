@@ -1,65 +1,51 @@
 import os
 import telebot
-import ftplib
-import re
+import logging
 from flask import Flask, request
 
+# Твой токен
 TOKEN = "8510832683:AAHMvIzskXXu0IaJHgV4m3O1BRbu8HJCfd4"
-ADMIN_ID = 8125791280
+
+# 1. Включаем подробные логи, чтобы видеть ошибки в консоли Render
+telebot.logger.setLevel(logging.DEBUG)
+
 bot = telebot.TeleBot(TOKEN)
 server = Flask(__name__)
 
-def update_site_file(new_data, var_name):
-    try:
-        # Берем данные из настроек Render
-        ftp = ftplib.FTP(os.getenv('FTP_HOST'))
-        ftp.login(os.getenv('FTP_USER'), os.getenv('FTP_PASS'))
-        
-        # Скачиваем файл
-        lines = []
-        ftp.retrlines('RETR htdocs/data.js', lines.append)
-        content = "\n".join(lines)
-        
-        # Умная замена через регулярки
-        pattern = rf"(const {var_name} = )\[.*?\](?=;)"
-        replacement = f"{var_name} = {new_data}" # упрощенно для теста
-        # Для точности используем:
-        new_content = re.sub(rf"const {var_name} = \[.*?\];", f"const {var_name} = {new_data};", content, flags=re.DOTALL)
-        
-        # Сохраняем и заливаем обратно
-        with open("temp_data.js", "w", encoding="utf-8") as f:
-            f.write(new_content)
-        
-        with open("temp_data.js", "rb") as f:
-            ftp.storbinary('STOR htdocs/data.js', f)
-            
-        ftp.quit()
-        return True
-    except Exception as e:
-        print(f"Ошибка FTP: {e}")
-        return False
-
+# 2. Обработчик команды /start
 @bot.message_handler(commands=['start'])
 def start(message):
-    bot.reply_to(message, f"Привет! Твой ID: {message.chat.id}. Бот на связи и готов работать.")
+    print(f"LOG: Получена команда START от {message.chat.id}") # Пишем в консоль
+    try:
+        bot.reply_to(message, "Привет! Бот видит тебя. Связь установлена ✅")
+    except Exception as e:
+        print(f"LOG: Ошибка при отправке ответа: {e}")
 
-@bot.message_handler(func=lambda m: m.text.startswith('/routes'))
-def handle_routes(message):
-    # Теперь любой может попробовать обновить маршруты (для теста)
-    json_data = message.text.replace('/routes', '').strip()
-    if update_site_file(json_data, "trunkRoutes"):
-        bot.reply_to(message, "✅ Маршруты на сайте обновлены!")
-    else:
-        bot.reply_to(message, "❌ Ошибка при обновлении файла через FTP.")
+# 3. Обработчик ВСЕХ остальных сообщений (эхо)
+@bot.message_handler(func=lambda message: True)
+def echo_all(message):
+    print(f"LOG: Получено сообщение: {message.text}")
+    bot.reply_to(message, f"Я получил твоё сообщение: {message.text}")
 
+# 4. Точка входа для Telegram (Webhook)
 @server.route('/' + TOKEN, methods=['POST'])
 def getMessage():
-    bot.process_new_updates([telebot.types.Update.de_json(request.stream.read().decode("utf-8"))])
-    return "!", 200
+    try:
+        # Получаем данные
+        json_string = request.get_data().decode('utf-8')
+        update = telebot.types.Update.de_json(json_string)
+        
+        # Передаем боту на обработку
+        bot.process_new_updates([update])
+        return "!", 200
+    except Exception as e:
+        print(f"LOG: Ошибка внутри Webhook: {e}")
+        return "Error", 500
 
+# 5. Главная страница (для проверки в браузере)
 @server.route("/")
 def webhook():
-    return "Бот работает!", 200
+    return "Бот работает! Жду сообщений в Telegram.", 200
 
 if __name__ == "__main__":
     server.run(host="0.0.0.0", port=int(os.environ.get('PORT', 5000)))
