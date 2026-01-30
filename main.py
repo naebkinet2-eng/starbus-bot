@@ -34,8 +34,27 @@ def start_cmd(message):
 
 @bot.callback_query_handler(func=lambda call: call.data == "pass_captcha")
 def on_captcha(call):
-    bot.answer_callback_query(call.id, "Проверка пройдена!")
-    bot.delete_message(call.message.chat.id, call.message.message_id)
+    # Пытаемся ответить Telegram, что мы приняли нажатие
+    try:
+        bot.answer_callback_query(call.id, "Проверка пройдена!")
+    except Exception as e:
+        # Если запрос устарел, просто пишем об этом в консоль и идем дальше
+        print(f"Запрос устарел, но это не критично: {e}")
+    
+    # Удаляем сообщение с кнопкой капчи
+    try:
+        bot.delete_message(call.message.chat.id, call.message.message_id)
+    except:
+        pass
+
+    # Отправляем приветственное фото и меню
+    bot.send_photo(
+        call.message.chat.id, 
+        IMAGE_URL, 
+        caption="✨ **Капча пройдена!**\n\nДобро пожаловать в StarBus Admin Panel. Используйте меню ниже для работы с рейсами.",
+        parse_mode="Markdown",
+        reply_markup=get_main_menu()
+    ) bot.delete_message(call.message.chat.id, call.message.message_id)
     bot.send_photo(
         call.message.chat.id, 
         IMAGE_URL, 
