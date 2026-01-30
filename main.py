@@ -54,13 +54,6 @@ def on_captcha(call):
         caption="✨ **Капча пройдена!**\n\nДобро пожаловать в StarBus Admin Panel. Используйте меню ниже для работы с рейсами.",
         parse_mode="Markdown",
         reply_markup=get_main_menu()
-    ) bot.delete_message(call.message.chat.id, call.message.message_id)
-    bot.send_photo(
-        call.message.chat.id, 
-        IMAGE_URL, 
-        caption="✨ **Капча пройдена!**\n\nДобро пожаловать в StarBus Admin Panel. Используйте меню ниже.",
-        parse_mode="Markdown",
-        reply_markup=get_main_menu()
     )
 
 @bot.message_handler(func=lambda m: m.text == "Добавить рейс")
