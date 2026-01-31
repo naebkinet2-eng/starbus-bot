@@ -180,43 +180,62 @@ def call_ai(message):
     Верни JSON с ключами: "new_cities", "route", "stations".
     """
 
+    def call_ai(message):
+    chat_id = message.chat.id
+    data = user_states.get(chat_id)
+    if not data:
+        bot.send_message(chat_id, "❌ Ошибка: сессия потеряна. Начните заново.")
+        return
+
+    log(f"--- ЗАПУСК ГЕНЕРАЦИИ ДЛЯ {chat_id} ---")
+    bot.send_message(chat_id, "🤖 Начинаю генерацию... (Шаг 1: Запрос к Google)")
+
+    prompt = f"""
+    Сгенерируй JSON для автобусного рейса {data['a']} - {data['b']}.
+    Остановки: {data.get('stops', 'на твой выбор')}. 
+    Цена: {data.get('price', 'рыночная')}. 
+    Верни ТОЛЬКО JSON с ключами 'new_cities', 'route', 'stations'.
+    """
+
     try:
-        # ВАЖНО: Весь этот блок должен иметь отступ 4 пробела!
-        response = model.generate_content(prompt)
+        log("Отправка промпта в Google Gemini...")
+        # Устанавливаем короткий таймаут, чтобы не ждать вечно
+        response = model.generate_content(prompt, request_options={"timeout": 40})
         
-        if not response.text:
-            raise Exception("ИИ вернул пустой ответ")
+        log("Ответ от Google получен!")
+        
+        if not response or not response.text:
+            log("Критическая ошибка: Ответ пустой!")
+            bot.send_message(chat_id, "⚠️ ИИ вернул пустой ответ.")
+            return
 
+        log("Очистка и парсинг JSON...")
         raw_text = response.text
-        if "```json" in raw_text:
-            raw_text = raw_text.split("```json")[1].split("```")[0]
-        elif "```" in raw_text:
-            raw_text = raw_text.split("```")[1].split("```")[0]
+        # Чистим от markdown
+        clean_text = re.sub(r'```json|```javascript|```', '', raw_text).strip()
         
-        result_json = json.loads(raw_text.strip())
+        result_json = json.loads(clean_text)
         user_states[chat_id]['generated_data'] = result_json
+        log("JSON успешно распарсен!")
 
-        # 1. Вывод Городов
-        cities_str = "const citiesDatabase = " + json.dumps(result_json['new_cities'], indent=4, ensure_ascii=False) + ";"
-        bot.send_message(chat_id, f"🏙 **Часть 1: Города**\n```javascript\n{cities_str}\n```", parse_mode="Markdown")
+        # Вывод данных в чат
+        cities_str = json.dumps(result_json['new_cities'], indent=2, ensure_ascii=False)
+        bot.send_message(chat_id, f"🏙 **Города:**\n```javascript\nconst citiesDatabase = {cities_str};\n```", parse_mode="Markdown")
 
-        # 2. Вывод Маршрута
-        route_str = json.dumps(result_json['route'], indent=4, ensure_ascii=False)
-        route_msg = f"🚌 **Часть 2: Маршрут**\n```javascript\n{route_str}\n```"
-        bot.send_message(chat_id, route_msg, parse_mode="Markdown")
+        route_str = json.dumps(result_json['route'], indent=2, ensure_ascii=False)
+        bot.send_message(chat_id, f"🚌 **Маршрут:**\n```javascript\n{route_str}\n```", parse_mode="Markdown")
 
-        # 3. Вывод Вокзалов
-        stations_str = "const stationNames = " + json.dumps(result_json['stations'], indent=4, ensure_ascii=False) + ";"
-        bot.send_message(chat_id, f"🏢 **Часть 3: Вокзалы**\n```javascript\n{stations_str}\n```", parse_mode="Markdown")
+        stations_str = json.dumps(result_json['stations'], indent=2, ensure_ascii=False)
+        bot.send_message(chat_id, f"🏢 **Вокзалы:**\n```javascript\nconst stationNames = {stations_str};\n```", parse_mode="Markdown")
 
         markup = types.InlineKeyboardMarkup()
         markup.add(types.InlineKeyboardButton("🚀 Добавить маршрут на сайт", callback_data="upload_route"))
-        bot.send_message(chat_id, "✨ Данные готовы! Нажми кнопку для загрузки на FTP.", reply_markup=markup)
+        bot.send_message(chat_id, "✨ Готово! Проверь данные и жми кнопку.", reply_markup=markup)
 
     except Exception as e:
-        print(f"Ошибка ИИ: {e}")
-        bot.send_message(chat_id, f"⚠️ Ошибка генерации: {str(e)}", reply_markup=get_main_menu())
-
+        log(f"ОШИБКА В call_ai: {e}")
+        bot.send_message(chat_id, f"❌ Произошла ошибка: {str(e)}", reply_markup=get_main_menu())
+        
 # --- ЛОГИКА FTP (ЗАГРУЗКА) ---
 
 @bot.callback_query_handler(func=lambda call: call.data == "upload_route")
