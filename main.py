@@ -130,15 +130,37 @@ def call_ai(message, manual_price=True):
     log(f"Генерация для {data['a']} - {data['b']}")
 
     prompt = f"""
-    Сгенерируй JSON для рейса {data['a']} - {data['b']}. Остановки: {data['stops']}. Время: {data['time']}. Цена: {data['price']}.
-    Верни ТОЛЬКО JSON:
+Ты бэкенд-разработчик транспортной компании.
+    Задача: Сгенерировать JSON объект, содержащий 3 части данных для сайта.
+    
+    Входные данные:
+    - Маршрут: {data['a']} -> {data['b']}
+    - Обязательные остановки: {data['stops']}
+    - Время/Расписание: {data['time']}
+    - Цена/Инструкция: {data['price']} (Валюта: UAH)
+
+    ТРЕБОВАНИЯ К ФОРМАТУ (СТРОГО):
+    Верни ОДИН JSON объект с тремя ключами: "new_cities", "route", "stations".
+
+    1. "new_cities": Объект, где ключи - названия городов на английском/транслите (например 'Lviv', 'Kyiv'), а значения - координаты {{lat: ..., lng: ...}}. Добавь ВСЕ города маршрута.
+    2. "route": Объект рейса. 
+       - id: 'line-citya-cityb' (на английском)
+       - stops: Массив названий городов на местном языке (например ['Київ', 'Житомир', ...]).
+       - times: Массив времени. Если переход через полночь, пиши '+1 06:00'.
+       - prices: Массив НАКОПИТЕЛЬНОЙ цены в гривнах. Начало 0, конец - полная цена. [0, 300, 800, ..., {data['price'] if 'UAH' not in data['price'] else 'полная_цена'}].
+       - schedule: Массив дней [0,1,2,3,4,5,6].
+       - busInfo: 'Van Hool (55 місць)'.
+    3. "stations": Объект названий вокзалов для каждого города. 
+       - Ключ: Название города (как в stops). 
+       - Значение: {{ uk: '...', ru: '...', en: '...' }}.
+
+    ПРИМЕР ОТВЕТА (JSON):
     {{
-      "new_cities": {{ "EnglishName": {{ "lat": 0, "lng": 0 }} }},
-      "route": {{ "id": "line-id", "stops": ["Город"], "times": ["00:00"], "prices": [0, 500], "busType": "Premium", "schedule": [0,1,2,3,4,5,6] }},
-      "stations": {{ "Город": {{ "uk": "В", "ru": "В", "en": "S" }} }}
+      "new_cities": {{ "Kyiv": {{ "lat": 50.45, "lng": 30.52 }} }},
+      "route": {{ "id": "line-kyiv-lviv", "stops": ["Київ", "Львів"], "times": ["10:00", "18:00"], "prices": [0, 800], "busType": "Premium", "schedule": [0,1], "amenities": ["wifi"] }},
+      "stations": {{ "Київ": {{ "uk": "Автовокзал", "ru": "Автовокзал", "en": "Bus Station" }} }}
     }}
     """
-
     try:
         response = client.models.generate_content(model=MODEL_ID, contents=prompt)
         clean_text = re.sub(r'```json|```javascript|```', '', response.text).strip()
