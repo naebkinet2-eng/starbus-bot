@@ -1,24 +1,30 @@
 import os
 import telebot
+import google.generativeai as genai
+from telebot import types
+from flask import Flask, request
 import sys
 import json
 import re
 import ftplib
-from flask import Flask, request
-from telebot import types
-
-# Используем ТОЛЬКО новый SDK, как рекомендует Google для стабильности
-from google import genai 
 
 # --- НАСТРОЙКИ ---
 sys.stdout.reconfigure(encoding='utf-8')
 
 def log(msg):
-    # flush=True позволяет видеть логи в Render мгновенно
-    print(f"DEBUG: {msg}", flush=True)
+    print(f"[LOG] {msg}", flush=True)
 
 TOKEN = os.getenv("TOKENBOT")
 API_KEY = os.getenv("GEMINI_API_KEY")
+
+# Настройка старой библиотеки
+genai.configure(api_key=API_KEY)
+# Явно создаем модель БЕЗ префиксов, чтобы не провоцировать 404
+model = genai.GenerativeModel('gemini-1.5-flash')
+
+bot = telebot.TeleBot(TOKEN, threaded=False)
+server = Flask(__name__)
+user_states = {}
 IMAGE_URL = "https://i.ibb.co/MxXv4XGC/Gemini-Generated-Image-wb2747wb2747wb27.png"
 
 # Настройки FTP
