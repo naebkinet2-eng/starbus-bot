@@ -167,15 +167,26 @@ def run_ai_generation(message, manual_price=True):
     }}
     """
 
-   try:
-        # Указываем безопасность и параметры, чтобы модель не капризничала
+def call_ai(message):
+    chat_id = message.chat.id
+    time_info = message.text
+    data = user_states[chat_id]
+    
+    bot.send_message(chat_id, "🤖 Нейросеть генерирует маршрут...")
+
+    prompt = f"""
+    Ты бэкенд-разработчик. Сгенерируй JSON для рейса {data['a']} - {data['b']}, выезд {time_info}. 
+    Обязательно проезжай через: {data['stops']}. Цена: {data['price']}.
+    Верни JSON с ключами: "new_cities", "route", "stations".
+    """
+
+    try:
+        # ВАЖНО: Весь этот блок должен иметь отступ 4 пробела!
         response = model.generate_content(prompt)
         
-        # Проверка на пустой ответ
         if not response.text:
             raise Exception("ИИ вернул пустой ответ")
 
-        # Очистка текста от лишних знаков Markdown
         raw_text = response.text
         if "```json" in raw_text:
             raw_text = raw_text.split("```json")[1].split("```")[0]
@@ -183,30 +194,28 @@ def run_ai_generation(message, manual_price=True):
             raw_text = raw_text.split("```")[1].split("```")[0]
         
         result_json = json.loads(raw_text.strip())
-        
         user_states[chat_id]['generated_data'] = result_json
 
-        # 1. Выводим Cities
+        # 1. Вывод Городов
         cities_str = "const citiesDatabase = " + json.dumps(result_json['new_cities'], indent=4, ensure_ascii=False) + ";"
         bot.send_message(chat_id, f"🏙 **Часть 1: Города**\n```javascript\n{cities_str}\n```", parse_mode="Markdown")
 
-        # 2. Выводим Route
+        # 2. Вывод Маршрута
         route_str = json.dumps(result_json['route'], indent=4, ensure_ascii=False)
-        route_msg = f"🚌 **Часть 2: Маршрут**\n```javascript\n// В массив trunkRoutes:\n{route_str}\n```"
+        route_msg = f"🚌 **Часть 2: Маршрут**\n```javascript\n{route_str}\n```"
         bot.send_message(chat_id, route_msg, parse_mode="Markdown")
 
-        # 3. Выводим Stations
+        # 3. Вывод Вокзалов
         stations_str = "const stationNames = " + json.dumps(result_json['stations'], indent=4, ensure_ascii=False) + ";"
         bot.send_message(chat_id, f"🏢 **Часть 3: Вокзалы**\n```javascript\n{stations_str}\n```", parse_mode="Markdown")
 
-        # Кнопка загрузки
         markup = types.InlineKeyboardMarkup()
         markup.add(types.InlineKeyboardButton("🚀 Добавить маршрут на сайт", callback_data="upload_route"))
-        bot.send_message(chat_id, "✨ Данные готовы! Проверь и нажимай кнопку для публикации на сайт.", reply_markup=markup)
+        bot.send_message(chat_id, "✨ Данные готовы! Нажми кнопку для загрузки на FTP.", reply_markup=markup)
 
     except Exception as e:
-        log(f"Ошибка ИИ: {e}")
-        bot.send_message(chat_id, f"⚠️ Ошибка генерации: {str(e)}\n\nПопробуйте нажать 'Добавить рейс' заново.", reply_markup=get_main_menu())
+        print(f"Ошибка ИИ: {e}")
+        bot.send_message(chat_id, f"⚠️ Ошибка генерации: {str(e)}", reply_markup=get_main_menu())
 
 # --- ЛОГИКА FTP (ЗАГРУЗКА) ---
 
