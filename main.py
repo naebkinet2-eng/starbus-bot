@@ -7,7 +7,7 @@ import google.generativeai as genai
 from telebot import types
 from flask import Flask, request
 
-TOKEN = "TOKENBOT"
+TOKEN = os.getenv("TOKENBOT")
 IMAGE_URL = "https://i.ibb.co/MxXv4XGC/Gemini-Generated-Image-wb2747wb2747wb27.png"
 
 # Инициализация ИИ - ИСПРАВЛЕНО НА gemini-1.5-flash
