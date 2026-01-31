@@ -28,9 +28,9 @@ HTML_FILE = "htdocs/index.html"
 # Инициализация нового клиента Gemini (v2)
 client = genai.Client(
     api_key=API_KEY,
-    http_options={'api_version': 'v1'} # Это уберет ошибку v1beta
+    http_options={'api_version': 'v1'} 
 )
-MODEL_ID = "gemini-2.5-flash"
+MODEL_ID = "gemini-1.5-flash"
 bot = telebot.TeleBot(TOKEN, threaded=False)
 server = Flask(__name__)
 user_states = {}
