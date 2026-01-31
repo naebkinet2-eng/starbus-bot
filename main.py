@@ -167,20 +167,8 @@ def run_ai_generation(message, manual_price=True):
     }}
     """
 
+
 def call_ai(message):
-    chat_id = message.chat.id
-    time_info = message.text
-    data = user_states[chat_id]
-    
-    bot.send_message(chat_id, "🤖 Нейросеть генерирует маршрут...")
-
-    prompt = f"""
-    Ты бэкенд-разработчик. Сгенерируй JSON для рейса {data['a']} - {data['b']}, выезд {time_info}. 
-    Обязательно проезжай через: {data['stops']}. Цена: {data['price']}.
-    Верни JSON с ключами: "new_cities", "route", "stations".
-    """
-
-    def call_ai(message):
     chat_id = message.chat.id
     data = user_states.get(chat_id)
     if not data:
