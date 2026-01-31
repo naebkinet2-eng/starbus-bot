@@ -7,12 +7,31 @@ import google.generativeai as genai
 from telebot import types
 from flask import Flask, request
 
+# Берем токен из Environment Variables
 TOKEN = os.getenv("TOKENBOT")
 IMAGE_URL = "https://i.ibb.co/MxXv4XGC/Gemini-Generated-Image-wb2747wb2747wb27.png"
 
-# Инициализация ИИ - ИСПРАВЛЕНО НА gemini-1.5-flash
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-ai_model = genai.GenerativeModel('gemini-1.5-flash-latest')
+# Инициализация ИИ
+api_key = os.getenv("GEMINI_API_KEY")
+genai.configure(api_key=api_key)
+
+# --- БЛОК ДИАГНОСТИКИ (Пишет модели в лог при запуске) ---
+print("--- НАЧАЛО ПРОВЕРКИ МОДЕЛЕЙ ---")
+try:
+    for m in genai.list_models():
+        if 'generateContent' in m.supported_generation_methods:
+            print(f"Доступная модель: {m.name}")
+except Exception as e:
+    print(f"Ошибка при проверке моделей: {e}")
+print("--- КОНЕЦ ПРОВЕРКИ МОДЕЛЕЙ ---")
+
+# Пробуем самую стандартную версию Flash
+# Если в логах увидишь другое название, мы его заменим
+try:
+    ai_model = genai.GenerativeModel('gemini-1.5-flash')
+except:
+    # Запасной вариант, если Flash недоступна
+    ai_model = genai.GenerativeModel('gemini-pro')
 
 bot = telebot.TeleBot(TOKEN, threaded=False)
 server = Flask(__name__)
@@ -28,30 +47,25 @@ def get_main_menu():
 @bot.message_handler(commands=['start'])
 def start_cmd(message):
     markup = types.InlineKeyboardMarkup()
-    # ИСПРАВЛЕНО: callback_data
     markup.add(types.InlineKeyboardButton(text="Я не робот 🤖", callback_data="pass_captcha"))
     bot.send_message(message.chat.id, "Для доступа к панели управления подтвердите, что вы человек:", reply_markup=markup)
 
 @bot.callback_query_handler(func=lambda call: call.data == "pass_captcha")
 def on_captcha(call):
-    # Пытаемся ответить Telegram, что мы приняли нажатие
     try:
         bot.answer_callback_query(call.id, "Проверка пройдена!")
-    except Exception as e:
-        # Если запрос устарел, просто пишем об этом в консоль и идем дальше
-        print(f"Запрос устарел, но это не критично: {e}")
+    except:
+        pass # Игнорируем, если кнопка устарела
     
-    # Удаляем сообщение с кнопкой капчи
     try:
         bot.delete_message(call.message.chat.id, call.message.message_id)
     except:
         pass
 
-    # Отправляем приветственное фото и меню
     bot.send_photo(
         call.message.chat.id, 
         IMAGE_URL, 
-        caption="✨ **Капча пройдена!**\n\nДобро пожаловать в StarBus Admin Panel. Используйте меню ниже для работы с рейсами.",
+        caption="✨ **Капча пройдена!**\n\nДобро пожаловать в StarBus Admin Panel. Используйте меню ниже.",
         parse_mode="Markdown",
         reply_markup=get_main_menu()
     )
@@ -108,7 +122,11 @@ def call_ai_logic(message):
         bot.send_message(chat_id, "✅ **Рейс сгенерирован!**", parse_mode="Markdown")
         bot.send_message(chat_id, f"```javascript\n{response.text}\n```", parse_mode="Markdown", reply_markup=get_main_menu())
     except Exception as e:
-        bot.send_message(chat_id, f"⚠️ Ошибка ИИ: {str(e)}", reply_markup=get_main_menu())
+        error_msg = str(e)
+        if "404" in error_msg:
+             bot.send_message(chat_id, "⚠️ Ошибка модели. Проверьте логи Render (раздел Logs), там выведен список доступных моделей.", reply_markup=get_main_menu())
+        else:
+             bot.send_message(chat_id, f"⚠️ Ошибка ИИ: {error_msg}", reply_markup=get_main_menu())
 
 @server.route('/' + TOKEN, methods=['POST'])
 def get_message():
