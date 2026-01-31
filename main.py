@@ -1,32 +1,29 @@
 import os
 import telebot
-import google.generativeai as genai
+from google import genai  # Используем только новый SDK
 from telebot import types
 from flask import Flask, request
 import sys
 import json
 import re
-import ftplib
 
 # --- НАСТРОЙКИ ---
 sys.stdout.reconfigure(encoding='utf-8')
-
-def log(msg):
-    print(f"[LOG] {msg}", flush=True)
-
 TOKEN = os.getenv("TOKENBOT")
 API_KEY = os.getenv("GEMINI_API_KEY")
 
-# Настройка старой доброй библиотеки
-genai.configure(api_key=API_KEY)
+# Инициализация клиента v2
+client = genai.Client(api_key=API_KEY)
 
-# ВНИМАНИЕ: Если 'gemini-1.5-flash' дает 404, попробуй 'gemini-pro'
-# Но Flash должен работать, если в названии нет лишних приставок
-model = genai.GenerativeModel('gemini-1.5-flash')
+# ВАЖНО: Добавляем префикс models/ - это лечит ошибку 404
+MODEL_ID = "models/gemini-1.5-flash"
 
 bot = telebot.TeleBot(TOKEN, threaded=False)
 server = Flask(__name__)
 user_states = {}
+
+def log(msg):
+    print(f"DEBUG: {msg}", flush=True)
 IMAGE_URL = "https://i.ibb.co/MxXv4XGC/Gemini-Generated-Image-wb2747wb2747wb27.png"
 
 # Настройки FTP
@@ -141,11 +138,7 @@ def call_ai(message, manual_price=True):
         user_states[chat_id]['price'] = message.text
     
     data = user_states.get(chat_id)
-    if not data:
-        bot.send_message(chat_id, "❌ Ошибка сессии.")
-        return
-
-    bot.send_message(chat_id, "🤖 Нейросеть генерирует маршрут...")
+    bot.send_message(chat_id, "🤖 Связываюсь с ИИ через стабильный канал...")
 
     prompt = f"""
     Ты бэкенд-разработчик транспортной компании.
@@ -180,41 +173,37 @@ def call_ai(message, manual_price=True):
     }}
     """
     try:
-        # Весь код внутри try должен иметь +4 пробела от уровня try
-        response = model.generate_content(
-            prompt,
-            request_options={'timeout': 30}
+        # Используем новый метод генерации
+        response = client.models.generate_content(
+            model=MODEL_ID,
+            contents=prompt
         )
         
-        if not response or not response.text:
-            raise Exception("Пустой ответ от ИИ")
+        if not response.text:
+            raise Exception("Пустой ответ от Google")
 
-        raw_text = response.text
-        # Чистим JSON от Markdown
-        clean_text = re.sub(r'```json|```javascript|```', '', raw_text).strip()
+        # Очистка текста от кавычек markdown
+        clean_text = re.sub(r'```json|```javascript|```', '', response.text).strip()
         result_json = json.loads(clean_text)
-        
         user_states[chat_id]['generated_data'] = result_json
 
-        # Вывод данных
-        cities_js = "const citiesDatabase = " + json.dumps(result_json['new_cities'], indent=4, ensure_ascii=False) + ";"
-        bot.send_message(chat_id, f"🏙 **Часть 1: Города**\n```javascript\n{cities_js}\n```", parse_mode="Markdown")
+        # Вывод данных в чат
+        cities_js = "const citiesDatabase = " + json.dumps(result_json['new_cities'], indent=2, ensure_ascii=False) + ";"
+        bot.send_message(chat_id, f"🏙 **Города:**\n```javascript\n{cities_js}\n```", parse_mode="Markdown")
 
-        route_js = json.dumps(result_json['route'], indent=4, ensure_ascii=False)
-        bot.send_message(chat_id, f"🚌 **Часть 2: Маршрут**\n```javascript\n{route_js}\n```", parse_mode="Markdown")
+        route_js = json.dumps(result_json['route'], indent=2, ensure_ascii=False)
+        bot.send_message(chat_id, f"🚌 **Маршрут:**\n```javascript\n{route_js}\n```", parse_mode="Markdown")
 
-        stations_js = "const stationNames = " + json.dumps(result_json['stations'], indent=4, ensure_ascii=False) + ";"
-        bot.send_message(chat_id, f"🏢 **Часть 3: Вокзалы**\n```javascript\n{stations_js}\n```", parse_mode="Markdown")
+        stations_js = "const stationNames = " + json.dumps(result_json['stations'], indent=2, ensure_ascii=False) + ";"
+        bot.send_message(chat_id, f"🏢 **Вокзалы:**\n```javascript\n{stations_js}\n```", parse_mode="Markdown")
 
         markup = types.InlineKeyboardMarkup()
-        markup.add(types.InlineKeyboardButton("🚀 Добавить маршрут на сайт", callback_data="upload_route"))
-        
-        bot.send_message(chat_id, "✨ Готово! Проверь и нажимай кнопку.", reply_markup=markup)
+        markup.add(types.InlineKeyboardButton("🚀 Добавить на сайт", callback_data="upload_route"))
+        bot.send_message(chat_id, "✨ Данные получены! Нажми кнопку для загрузки.", reply_markup=markup)
 
     except Exception as e:
-        # Этот блок EXCEPT должен стоять строго под TRY
-        log(f"Ошибка ИИ: {e}")
-        bot.send_message(chat_id, f"⚠️ Ошибка: {str(e)}", reply_markup=get_main_menu())
+        log(f"Ошибка: {e}")
+        bot.send_message(chat_id, f"❌ Ошибка API: {str(e)}")
 
 @bot.callback_query_handler(func=lambda call: call.data == "upload_route")
 def upload_route_handler(call):
