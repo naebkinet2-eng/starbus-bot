@@ -211,10 +211,10 @@ def call_ai(message, manual_price=True):
         markup.add(types.InlineKeyboardButton("🚀 Добавить маршрут на сайт", callback_data="upload_route"))
         bot.send_message(chat_id, "✨ Готово! Проверь и нажимай кнопку.", reply_markup=markup)
 
-    except Exception as e:
+  except Exception as e:
         log(f"Ошибка ИИ: {e}")
-        # Если 404 всё же лезет, попробуем заменить модель на gemini-pro прямо в ошибке
-        bot.send_message(chat_id, f"⚠️ Ошибка: {str(e)}", reply_markup=get_main_menu()
+        # Добавлена недостающая скобка в конце:
+        bot.send_message(chat_id, f"⚠️ Ошибка: {str(e)}", reply_markup=get_main_menu())
 
 @bot.callback_query_handler(func=lambda call: call.data == "upload_route")
 def upload_route_handler(call):
