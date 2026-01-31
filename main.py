@@ -1,17 +1,20 @@
 import os
 import telebot
-from google import genai  # Новый SDK
-from telebot import types
-from flask import Flask, request
 import sys
 import json
 import re
 import ftplib
+from flask import Flask, request
+from telebot import types
+
+# Используем ТОЛЬКО новый SDK, как рекомендует Google для стабильности
+from google import genai 
 
 # --- НАСТРОЙКИ ---
 sys.stdout.reconfigure(encoding='utf-8')
 
 def log(msg):
+    # flush=True позволяет видеть логи в Render мгновенно
     print(f"DEBUG: {msg}", flush=True)
 
 TOKEN = os.getenv("TOKENBOT")
@@ -25,16 +28,19 @@ FTP_PASS = os.getenv('FTP_PASS')
 DATA_FILE = "htdocs/CITY1.js" 
 HTML_FILE = "htdocs/index.html"
 
-# Инициализация нового клиента Gemini (v2)
-client = genai.Client(
-    api_key=API_KEY,
-    http_options={'api_version': 'v1'} 
-)
-MODEL_ID = "gemini-1.5-flash"
+# --- ИНИЦИАЛИЗАЦИЯ GEMINI ---
+# Мы убираем http_options v1beta, так как новый SDK сам выбирает рабочий маршрут.
+# Если 404 сохраняется, библиотека v2 лучше всего работает с коротким ID.
+try:
+    client = genai.Client(api_key=API_KEY)
+    MODEL_ID = "gemini-1.5-flash"
+    log("Клиент Gemini успешно инициализирован")
+except Exception as e:
+    log(f"Ошибка при инициализации клиента: {e}")
+
 bot = telebot.TeleBot(TOKEN, threaded=False)
 server = Flask(__name__)
 user_states = {}
-
 # --- КЛАВИАТУРЫ ---
 def get_main_menu():
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
