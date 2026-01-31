@@ -128,29 +128,26 @@ def ask_price_q(message):
 def process_price_decision(message):
     if "вручную" in message.text.lower():
         bot.send_message(message.chat.id, "Введите цену в ГРН:", reply_markup=types.ReplyKeyboardRemove())
-        bot.register_next_step_handler(message, call_ai)
+        bot.register_next_step_handler(message, call_ai) # Здесь по умолчанию manual_price=True
     else:
         user_states[message.chat.id]['price'] = "Рассчитай рыночную в UAH"
-        call_ai(message, manual_price=False)
+        call_ai(message, manual_price=False) # Теперь функция примет этот аргумент
 
-# --- ГЕНЕРАЦИЯ ИИ (NEW SDK) ---
-
-def call_ai(message):
+def call_ai(message, manual_price=True):
     chat_id = message.chat.id
-    # Получаем данные из сессии
+    if manual_price:
+        user_states[chat_id]['price'] = message.text
+    
     data = user_states.get(chat_id)
     if not data:
-        bot.send_message(chat_id, "Ошибка сессии. Начните заново.")
+        bot.send_message(chat_id, "❌ Ошибка сессии.")
         return
 
-    # Если цена или время пришли из последнего шага
-    if 'price' not in data:
-        user_states[chat_id]['price'] = message.text
-
-    bot.send_message(chat_id, "🤖 Нейросеть генерирует маршрут...")
+    bot.send_message(chat_id, "🤖 Генерирую данные... (Таймаут 30 сек)")
+    log(f"Запрос ИИ для: {data['a']} - {data['b']}")
 
     prompt = f"""
-    Ты бэкенд-разработчик транспортной компании.
+   Ты бэкенд-разработчик транспортной компании.
     Задача: Сгенерировать JSON объект, содержащий 3 части данных для сайта.
     
     Входные данные:
@@ -183,14 +180,39 @@ def call_ai(message):
     """
 
     try:
-        # ДОБАВЛЕН ТАЙМАУТ 30 СЕКУНД (чтобы не висело)
+        # Используем старую библиотеку с защитой от зависания
         response = model.generate_content(
-            prompt, 
+            prompt,
             request_options={'timeout': 30}
         )
         
         if not response.text:
-            raise Exception("ИИ вернул пустой ответ")
+            raise Exception("ИИ прислал пустой ответ")
+
+        # Очистка и парсинг
+        raw_text = response.text
+        clean_text = re.sub(r'```json|```javascript|```', '', raw_text).strip()
+        result_json = json.loads(clean_text)
+        
+        user_states[chat_id]['generated_data'] = result_json
+
+        # Вывод результатов
+        cities_str = "const citiesDatabase = " + json.dumps(result_json['new_cities'], indent=4, ensure_ascii=False) + ";"
+        bot.send_message(chat_id, f"🏙 **Часть 1: Города**\n```javascript\n{cities_str}\n```", parse_mode="Markdown")
+
+        route_str = json.dumps(result_json['route'], indent=4, ensure_ascii=False)
+        bot.send_message(chat_id, f"🚌 **Часть 2: Маршрут**\n```javascript\n{route_str}\n```", parse_mode="Markdown")
+
+        stations_str = "const stationNames = " + json.dumps(result_json['stations'], indent=4, ensure_ascii=False) + ";"
+        bot.send_message(chat_id, f"🏢 **Часть 3: Вокзалы**\n```javascript\n{stations_str}\n```", parse_mode="Markdown")
+
+        markup = types.InlineKeyboardMarkup()
+        markup.add(types.InlineKeyboardButton("🚀 Добавить маршрут на сайт", callback_data="upload_route"))
+        bot.send_message(chat_id, "✨ Готово! Проверь и нажимай кнопку.", reply_markup=markup)
+
+    except Exception as e:
+        log(f"Ошибка в блоке ИИ: {e}")
+        bot.send_message(chat_id, f"⚠️ Ошибка: {str(e)}", reply_markup=get_main_menu())
 
         # Чистим текст
         raw_text = response.text
