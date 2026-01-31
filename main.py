@@ -12,7 +12,7 @@ IMAGE_URL = "https://i.ibb.co/MxXv4XGC/Gemini-Generated-Image-wb2747wb2747wb27.p
 
 # Инициализация ИИ - ИСПРАВЛЕНО НА gemini-1.5-flash
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-ai_model = genai.GenerativeModel('gemini-1.5-flash')
+ai_model = genai.GenerativeModel('gemini-1.5-flash-latest')
 
 bot = telebot.TeleBot(TOKEN, threaded=False)
 server = Flask(__name__)
