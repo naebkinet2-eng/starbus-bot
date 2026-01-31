@@ -179,12 +179,12 @@ def call_ai(message, manual_price=True):
       "stations": {{ "Київ": {{ "uk": "Автовокзал", "ru": "Автовокзал", "en": "Bus Station" }} }}
     }}
     """
-    try:
+        try:
         # Это та самая версия генерации, где не было 404
         # Мы просто добавили таймаут, чтобы она не висела
-        response = model.generate_content(
-            prompt,
-            request_options={'timeout': 30}
+            response = model.generate_content(
+                prompt,
+                request_options={'timeout': 30}
         )
         
         if not response or not response.text:
@@ -211,10 +211,10 @@ def call_ai(message, manual_price=True):
         markup.add(types.InlineKeyboardButton("🚀 Добавить маршрут на сайт", callback_data="upload_route"))
         bot.send_message(chat_id, "✨ Готово! Проверь и нажимай кнопку.", reply_markup=markup)
 
-  except Exception as e:
-        log(f"Ошибка ИИ: {e}")
-        # Добавлена недостающая скобка в конце:
-        bot.send_message(chat_id, f"⚠️ Ошибка: {str(e)}", reply_markup=get_main_menu())
+        except Exception as e:
+            log(f"Ошибка ИИ: {e}")
+            # Добавлена недостающая скобка в конце:
+            bot.send_message(chat_id, f"⚠️ Ошибка: {str(e)}", reply_markup=get_main_menu())
 
 @bot.callback_query_handler(func=lambda call: call.data == "upload_route")
 def upload_route_handler(call):
