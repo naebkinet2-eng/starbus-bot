@@ -17,9 +17,11 @@ def log(msg):
 TOKEN = os.getenv("TOKENBOT")
 API_KEY = os.getenv("GEMINI_API_KEY")
 
-# Настройка старой библиотеки
+# Настройка старой доброй библиотеки
 genai.configure(api_key=API_KEY)
-# Явно создаем модель БЕЗ префиксов, чтобы не провоцировать 404
+
+# ВНИМАНИЕ: Если 'gemini-1.5-flash' дает 404, попробуй 'gemini-pro'
+# Но Flash должен работать, если в названии нет лишних приставок
 model = genai.GenerativeModel('gemini-1.5-flash')
 
 bot = telebot.TeleBot(TOKEN, threaded=False)
@@ -143,11 +145,10 @@ def call_ai(message, manual_price=True):
         bot.send_message(chat_id, "❌ Ошибка сессии.")
         return
 
-    bot.send_message(chat_id, "🤖 Генерирую данные... (Таймаут 30 сек)")
-    log(f"Запрос ИИ для: {data['a']} - {data['b']}")
+    bot.send_message(chat_id, "🤖 Нейросеть генерирует маршрут...")
 
     prompt = f"""
-   Ты бэкенд-разработчик транспортной компании.
+    Ты бэкенд-разработчик транспортной компании.
     Задача: Сгенерировать JSON объект, содержащий 3 части данных для сайта.
     
     Входные данные:
@@ -178,67 +179,42 @@ def call_ai(message, manual_price=True):
       "stations": {{ "Київ": {{ "uk": "Автовокзал", "ru": "Автовокзал", "en": "Bus Station" }} }}
     }}
     """
-
     try:
-        # Используем старую библиотеку с защитой от зависания
+        # Это та самая версия генерации, где не было 404
+        # Мы просто добавили таймаут, чтобы она не висела
         response = model.generate_content(
             prompt,
             request_options={'timeout': 30}
         )
         
-        if not response.text:
-            raise Exception("ИИ прислал пустой ответ")
+        if not response or not response.text:
+            raise Exception("Пустой ответ от ИИ")
 
-        # Очистка и парсинг
         raw_text = response.text
+        # Чистим JSON от Markdown
         clean_text = re.sub(r'```json|```javascript|```', '', raw_text).strip()
         result_json = json.loads(clean_text)
         
         user_states[chat_id]['generated_data'] = result_json
 
-        # Вывод результатов
-        cities_str = "const citiesDatabase = " + json.dumps(result_json['new_cities'], indent=4, ensure_ascii=False) + ";"
-        bot.send_message(chat_id, f"🏙 **Часть 1: Города**\n```javascript\n{cities_str}\n```", parse_mode="Markdown")
+        # Вывод данных
+        cities_js = "const citiesDatabase = " + json.dumps(result_json['new_cities'], indent=4, ensure_ascii=False) + ";"
+        bot.send_message(chat_id, f"🏙 **Часть 1: Города**\n```javascript\n{cities_js}\n```", parse_mode="Markdown")
 
-        route_str = json.dumps(result_json['route'], indent=4, ensure_ascii=False)
-        bot.send_message(chat_id, f"🚌 **Часть 2: Маршрут**\n```javascript\n{route_str}\n```", parse_mode="Markdown")
+        route_js = json.dumps(result_json['route'], indent=4, ensure_ascii=False)
+        bot.send_message(chat_id, f"🚌 **Часть 2: Маршрут**\n```javascript\n{route_js}\n```", parse_mode="Markdown")
 
-        stations_str = "const stationNames = " + json.dumps(result_json['stations'], indent=4, ensure_ascii=False) + ";"
-        bot.send_message(chat_id, f"🏢 **Часть 3: Вокзалы**\n```javascript\n{stations_str}\n```", parse_mode="Markdown")
+        stations_js = "const stationNames = " + json.dumps(result_json['stations'], indent=4, ensure_ascii=False) + ";"
+        bot.send_message(chat_id, f"🏢 **Часть 3: Вокзалы**\n```javascript\n{stations_js}\n```", parse_mode="Markdown")
 
         markup = types.InlineKeyboardMarkup()
         markup.add(types.InlineKeyboardButton("🚀 Добавить маршрут на сайт", callback_data="upload_route"))
         bot.send_message(chat_id, "✨ Готово! Проверь и нажимай кнопку.", reply_markup=markup)
 
     except Exception as e:
-        log(f"Ошибка в блоке ИИ: {e}")
-        bot.send_message(chat_id, f"⚠️ Ошибка: {str(e)}", reply_markup=get_main_menu())
-
-        # Чистим текст
-        raw_text = response.text
-        clean_text = re.sub(r'```json|```javascript|```', '', raw_text).strip()
-        
-        result_json = json.loads(clean_text)
-        user_states[chat_id]['generated_data'] = result_json
-
-        # Вывод данных (как в твоем рабочем коде)
-        cities_str = "const citiesDatabase = " + json.dumps(result_json['new_cities'], indent=4, ensure_ascii=False) + ";"
-        bot.send_message(chat_id, f"🏙 **Часть 1: Города**\n```javascript\n{cities_str}\n```", parse_mode="Markdown")
-
-        route_str = json.dumps(result_json['route'], indent=4, ensure_ascii=False)
-        bot.send_message(chat_id, f"🚌 **Часть 2: Маршрут**\n```javascript\n{route_str}\n```", parse_mode="Markdown")
-
-        stations_str = "const stationNames = " + json.dumps(result_json['stations'], indent=4, ensure_ascii=False) + ";"
-        bot.send_message(chat_id, f"🏢 **Часть 3: Вокзалы**\n```javascript\n{stations_str}\n```", parse_mode="Markdown")
-
-        markup = types.InlineKeyboardMarkup()
-        markup.add(types.InlineKeyboardButton("🚀 Добавить маршрут на сайт", callback_data="upload_route"))
-        bot.send_message(chat_id, "✨ Данные готовы! Нажми кнопку для загрузки.", reply_markup=markup)
-
-    except Exception as e:
         log(f"Ошибка ИИ: {e}")
-        bot.send_message(chat_id, f"⚠️ Ошибка: {str(e)}. Попробуйте еще раз.")
-# --- FTP ЗАГРУЗКА ---
+        # Если 404 всё же лезет, попробуем заменить модель на gemini-pro прямо в ошибке
+        bot.send_message(chat_id, f"⚠️ Ошибка: {str(e)}", reply_markup=get_main_menu()
 
 @bot.callback_query_handler(func=lambda call: call.data == "upload_route")
 def upload_route_handler(call):
